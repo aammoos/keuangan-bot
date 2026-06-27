@@ -20,30 +20,59 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     filters, ContextTypes, CallbackQueryHandler
 )
+import os
+import json
+import tempfile
 import gspread
 from google.oauth2.service_account import Credentials
+from dotenv import load_dotenv
+import logging
 
 load_dotenv()
+
 logging.basicConfig(
     format="%(asctime)s — %(levelname)s — %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN   = os.getenv("BOT_TOKEN")
-ALLOWED_ID  = int(os.getenv("CHAT_ID", "0"))   # hanya kamu yang bisa akses
-SHEET_ID    = os.getenv("SHEET_ID")
-CREDS_FILE  = os.getenv("GOOGLE_CREDS", "credentials.json")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ALLOWED_ID = int(os.getenv("CHAT_ID", "0"))
+SHEET_ID = os.getenv("SHEET_ID")
 
-# ─── Google Sheets Setup ─────────────────────────────────────
+# ─── GOOGLE CREDENTIALS SETUP UNTUK RAILWAY ─────────────────────
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
 
+def get_credentials():
+    # Prioritas 1: Dari Environment Variable (Railway)
+    creds_json_str = os.getenv("GOOGLE_CREDS_JSON")
+    if creds_json_str:
+        try:
+            creds_dict = json.loads(creds_json_str)
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump(creds_dict, f)
+                temp_path = f.name
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_path
+            print("✅ Credentials loaded from GOOGLE_CREDS_JSON (Railway)")
+            return Credentials.from_service_account_file(temp_path, scopes=SCOPES)
+        except Exception as e:
+            print(f"❌ Error loading JSON: {e}")
+
+    # Prioritas 2: Local file (untuk testing di komputer)
+    local_file = "credentials.json.json"
+    if os.path.exists(local_file):
+        print(f"✅ Using local file: {local_file}")
+        return Credentials.from_service_account_file(local_file, scopes=SCOPES)
+
+    raise Exception("❌ Credentials not found! Set GOOGLE_CREDS_JSON in Railway.")
+
+# ─── Google Sheets Setup ─────────────────────────────────────
 def get_sheet():
-    creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
-    gc    = gspread.authorize(creds)
+    creds = get_credentials()
+    gc = gspread.authorize(creds)
     return gc.open_by_key(SHEET_ID)
 
 # ─── Security: tolak semua selain pemilik ────────────────────
