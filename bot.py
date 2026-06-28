@@ -3,7 +3,7 @@ BOT KEUANGAN PRIBADI — Full Version (Fixed)
 Fix: parser diperluas, laporan baca sheet, data benar ditulis, credentials typo
 """
 
-import os, re, json, tempfile, logging
+import os, re, json, logging
 from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -31,25 +31,26 @@ SCOPES     = [
 # CREDENTIALS  (FIX #4: hilangkan typo .json.json)
 # ─────────────────────────────────────────────────────────────
 def get_credentials():
+    # Opsi 1: Railway env var
     creds_json = os.getenv("GOOGLE_CREDS_JSON")
     if creds_json:
         try:
             creds_dict = json.loads(creds_json)
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-                json.dump(creds_dict, f)
-                temp_path = f.name
             logger.info("✅ Credentials dari Railway env")
-            return Credentials.from_service_account_file(temp_path, scopes=SCOPES)
+            # Langsung pakai dict, tidak perlu temp file (lebih aman)
+            return Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        except json.JSONDecodeError as e:
+            logger.error(f"GOOGLE_CREDS_JSON bukan valid JSON: {e}")
         except Exception as e:
-            logger.error(f"GOOGLE_CREDS_JSON parse error: {e}")
+            logger.error(f"Credentials error: {e}")
 
-    # FIX: bukan "credentials.json.json"
+    # Opsi 2: file lokal
     local = "credentials.json"
     if os.path.exists(local):
         logger.info("✅ Credentials dari file lokal")
         return Credentials.from_service_account_file(local, scopes=SCOPES)
 
-    raise Exception("Tidak ada credentials! Isi GOOGLE_CREDS_JSON di Railway, atau simpan credentials.json di folder bot.")
+    raise Exception("Tidak ada credentials! Isi GOOGLE_CREDS_JSON di Railway Variables.")
 
 
 def get_sheet():
